@@ -1,0 +1,364 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Allow manual triggering
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # Code quality and security checks
+  quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for better analysis
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    - name: Run Ruff linting
+      run: |
+        ruff check app/ --output-format=github
+
+    - name: Run Ruff formatting check
+      run: |
+        ruff format --check app/
+
+    - name: Run Black formatting check
+      run: |
+        black --check app/
+
+    - name: Run MyPy type checking
+      run: |
+        mypy app/
+
+    - name: Run Bandit security check
+      run: |
+        bandit -r app/ -f json -o bandit-report.json || true
+        bandit -r app/
+
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-report
+        path: bandit-report.json
+
+  # Test suite execution
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    - name: Create test directory
+      run: mkdir -p tests
+
+    - name: Create basic test file
+      run: |
+        cat > tests/test_main.py << 'EOF'
+        """Basic tests for FastAPI application."""
+        import pytest
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        client = TestClient(app)
+
+        def test_root_endpoint():
+            """Test root endpoint returns correct response."""
+            response = client.get("/")
+            assert response.status_code == 200
+            data = response.json()
+            assert "message" in data
+            assert "version" in data
+            assert data["message"] == "Prime Math API"
+
+        def test_health_check():
+            """Test health check endpoint."""
+            response = client.get("/health")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "healthy"
+
+        def test_docs_endpoint():
+            """Test OpenAPI docs are accessible."""
+            response = client.get("/docs")
+            assert response.status_code == 200
+        EOF
+
+    - name: Run tests with coverage
+      run: |
+        pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-report=term-missing
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: matrix.python-version == '3.11'
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v3
+      if: matrix.python-version == '3.11'
+      with:
+        name: coverage-report
+        path: htmlcov/
+
+  # Build and validate package
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Build package
+      run: |
+        python -m build
+
+    - name: Validate package
+      run: |
+        twine check dist/*
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: dist/
+
+  # Docker build and test
+  docker:
+    name: Docker Build & Test
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: false
+        tags: prime-math-api:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        outputs: type=docker,dest=/tmp/image.tar
+
+    - name: Upload Docker image artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: docker-image
+        path: /tmp/image.tar
+
+    - name: Load and test Docker image
+      run: |
+        docker load --input /tmp/image.tar
+        docker run --rm -d -p 8000:8000 --name test-api prime-math-api:test
+        sleep 10  # Wait for startup
+
+        # Test endpoints
+        curl -f http://localhost:8000/ | grep "Prime Math API"
+        curl -f http://localhost:8000/health | grep "healthy"
+        curl -f http://localhost:8000/docs > /dev/null
+
+        docker stop test-api
+
+  # Performance and load testing
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+        pip install locust
+
+    - name: Create performance test
+      run: |
+        cat > locustfile.py << 'EOF'
+        from locust import HttpUser, task, between
+
+        class APIUser(HttpUser):
+            wait_time = between(0.1, 0.5)
+
+            @task(3)
+            def test_root(self):
+                self.client.get("/")
+
+            @task(2)
+            def test_health(self):
+                self.client.get("/health")
+
+            @task(1)
+            def test_docs(self):
+                self.client.get("/docs")
+        EOF
+
+    - name: Run performance tests
+      run: |
+        # Start the API in background
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+        API_PID=$!
+        sleep 5
+
+        # Run load test
+        locust -f locustfile.py --host=http://localhost:8000 --users 10 --spawn-rate 2 --run-time 30s --headless --html performance-report.html
+
+        # Stop API
+        kill $API_PID
+
+    - name: Upload performance report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: performance-report
+        path: performance-report.html
+
+  # Deployment preparation (only on main branch)
+  deploy-prep:
+    name: Deployment Preparation
+    runs-on: ubuntu-latest
+    needs: [build, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: dist
+        path: dist/
+
+    - name: Download Docker image
+      uses: actions/download-artifact@v3
+      with:
+        name: docker-image
+        path: /tmp/
+
+    - name: Generate deployment manifest
+      run: |
+        cat > deployment-manifest.json << EOF
+        {
+          "version": "0.1.0",
+          "commit": "${{ github.sha }}",
+          "branch": "${{ github.ref_name }}",
+          "build_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "artifacts": {
+            "python_package": "dist/",
+            "docker_image": "/tmp/image.tar"
+          },
+          "environment": {
+            "python_version": "${{ env.PYTHON_VERSION }}",
+            "platform": "linux/x86_64"
+          }
+        }
+        EOF
+
+    - name: Upload deployment manifest
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-manifest
+        path: deployment-manifest.json
+
+  # Summary job for branch protection
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [quality, test, build, docker]
+    if: always()
+
+    steps:
+    - name: Check all jobs status
+      run: |
+        echo "Quality job: ${{ needs.quality.result }}"
+        echo "Test job: ${{ needs.test.result }}"
+        echo "Build job: ${{ needs.build.result }}"
+        echo "Docker job: ${{ needs.docker.result }}"
+
+        if [[ "${{ needs.quality.result }}" != "success" ]] || \
+           [[ "${{ needs.test.result }}" != "success" ]] || \
+           [[ "${{ needs.build.result }}" != "success" ]] || \
+           [[ "${{ needs.docker.result }}" != "success" ]]; then
+          echo "One or more critical jobs failed"
+          exit 1
+        fi
+
+        echo "All critical jobs passed successfully!"

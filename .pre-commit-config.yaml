@@ -1,0 +1,114 @@
+# Pre-commit hooks configuration for prime-math-api
+# Install with: pre-commit install
+# Run manually with: pre-commit run --all-files
+
+repos:
+  # Ruff for fast Python linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.6
+    hooks:
+      - id: ruff
+        name: ruff-lint
+        description: "Run Ruff linter"
+        args: [--fix]
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff-format
+        description: "Run Ruff formatter"
+        types_or: [python, pyi]
+
+  # Black for consistent code formatting (backup to ruff-format)
+  - repo: https://github.com/psf/black
+    rev: 23.11.0
+    hooks:
+      - id: black
+        name: black
+        description: "Black Python code formatter"
+        language_version: python3.11
+
+  # Built-in hooks for general file quality
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        description: "Trim trailing whitespace"
+        exclude: ^\.claude/
+      - id: end-of-file-fixer
+        description: "Ensure files end with newline"
+        exclude: ^\.claude/
+      - id: check-yaml
+        description: "Check YAML file syntax"
+        exclude: ^\.claude/
+      - id: check-json
+        description: "Check JSON file syntax"
+        exclude: ^\.claude/
+      - id: check-toml
+        description: "Check TOML file syntax"
+        exclude: ^\.claude/
+      - id: check-merge-conflict
+        description: "Check for merge conflict markers"
+      - id: check-added-large-files
+        description: "Prevent large files from being committed"
+        args: ['--maxkb=1000']
+      - id: debug-statements
+        description: "Check for debugger imports and breakpoints"
+        language_version: python3.11
+
+  # MyPy for static type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.1
+    hooks:
+      - id: mypy
+        name: mypy
+        description: "MyPy static type checker"
+        language_version: python3.11
+        additional_dependencies:
+          - fastapi>=0.104.0
+          - pydantic>=2.5.0
+          - uvicorn>=0.24.0
+        args: [--config-file=pyproject.toml]
+        exclude: ^(tests/|docs/|\.claude/)
+
+  # Security checks
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        name: bandit
+        description: "Bandit security linter"
+        args: [-c, pyproject.toml]
+        additional_dependencies: ["bandit[toml]"]
+        exclude: ^tests/
+
+default_language_version:
+  python: python3.11
+
+# Global exclusions
+exclude: |
+  (?x)^(
+    \.git/|
+    \.claude/|
+    __pycache__/|
+    \.pytest_cache/|
+    \.mypy_cache/|
+    \.ruff_cache/|
+    build/|
+    dist/|
+    \.venv/|
+    venv/|
+    env/|
+    \.env
+  )
+
+# Configuration
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false

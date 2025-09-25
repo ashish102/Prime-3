@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # Prime Math API service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_DATE: ${BUILD_DATE:-now}
+        VERSION: ${VERSION:-0.1.0}
+        VCS_REF: ${VCS_REF:-local}
+    container_name: prime-math-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - PORT=8000
+    volumes:
+      # Mount source code for development (comment out for production)
+      - ./app:/app/app:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=10)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - prime-api-network
+
+  # Development service with hot reload
+  api-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: prime-math-api-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - PORT=8000
+      - ENVIRONMENT=development
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./requirements-dev.txt:/app/requirements-dev.txt:ro
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    restart: unless-stopped
+    profiles:
+      - dev
+    networks:
+      - prime-api-network
+
+networks:
+  prime-api-network:
+    driver: bridge
+    name: prime-api-network
+
+# Docker Compose usage:
+# Production: docker-compose up api
+# Development: docker-compose --profile dev up api-dev
+# All services: docker-compose --profile dev up

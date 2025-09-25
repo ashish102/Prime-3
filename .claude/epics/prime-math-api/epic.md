@@ -4,7 +4,7 @@ status: backlog
 created: 2025-09-25T20:05:49Z
 progress: 0%
 prd: .claude/prds/prime-math-api.md
-github: [Will be updated when synced to GitHub]
+github: https://github.com/ashish102/Prime-3/issues/1
 ---
 
 # Epic: prime-math-api
@@ -106,15 +106,15 @@ High-level task categories that will be created:
 - **Arithmetic Progression**: Compute correct run lengths for test sequences
 
 ## Tasks Created
-- [ ] 001.md - Core Number Theory Module Implementation (parallel: true)
-- [ ] 002.md - FastAPI Application and Endpoints (parallel: false)
-- [ ] 003.md - Comprehensive Testing Suite (parallel: false)
-- [ ] 004.md - Development Workflow and Tooling Setup (parallel: true)
-- [ ] 005.md - API Documentation and Deployment Guide (parallel: true)
+- [ ] #2 - Core Number Theory Module Implementation (parallel: true)
+- [ ] #3 - FastAPI Application and Endpoints (parallel: false)
+- [ ] #4 - Comprehensive Testing Suite (parallel: false)
+- [ ] #5 - Development Workflow and Tooling Setup (parallel: true)
+- [ ] #6 - API Documentation and Deployment Guide (parallel: true)
 
 **Total tasks**: 5
-**Parallel tasks**: 3 (001, 004, 005)
-**Sequential tasks**: 2 (002, 003)
+**Parallel tasks**: 3 (#2, #5, #6)
+**Sequential tasks**: 2 (#3, #4)
 **Estimated total effort**: 42-58 hours
 
 ## Estimated Effort
