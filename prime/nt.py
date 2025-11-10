@@ -211,6 +211,44 @@ def is_probable_prime(n: Union[int, float], k: int = 20) -> bool:
     return True
 
 
+def is_pseudoprime(n: Union[int, float], base: Union[int, float] = 2) -> bool:
+    """
+    Test if a number is a Fermat pseudoprime to a given base.
+
+    A composite number n is a pseudoprime to base a if:
+        1. n > 1 and composite
+        2. gcd(a, n) == 1
+        3. a^(n-1) ≡ 1 (mod n)
+
+    Args:
+        n: Integer to test (0 ≤ n ≤ 2^64 - 1)
+        base: Base for Fermat's little theorem check (2 ≤ base ≤ 2^64 - 1)
+
+    Returns:
+        True if n is a pseudoprime to the specified base, False otherwise.
+
+    Raises:
+        TypeError: If n or base are not integers or convertible floats.
+        ValueError: If inputs are negative, exceed 64-bit range, or base < 2.
+    """
+    n = _validate_input(n, "n")
+    base = _validate_input(base, "base")
+
+    if base < 2:
+        raise ValueError(f"base must be at least 2, got {base}")
+
+    if n < 2:
+        return False
+
+    if is_prime_64(n):
+        return False
+
+    if math.gcd(base, n) != 1:
+        return False
+
+    return pow(base, n - 1, n) == 1
+
+
 def _trial_division(n: int) -> List[int]:
     """
     Factor out small primes using trial division.
