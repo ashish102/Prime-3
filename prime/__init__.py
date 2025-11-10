@@ -16,6 +16,7 @@ __author__ = "Claude Code PM System"
 from .nt import (
     is_prime_64,
     is_probable_prime,
+    is_pseudoprime,
     factorize,
     prime_run_length
 )
@@ -23,6 +24,7 @@ from .nt import (
 __all__ = [
     "is_prime_64",
     "is_probable_prime",
+    "is_pseudoprime",
     "factorize",
     "prime_run_length"
 ]
