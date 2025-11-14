@@ -454,6 +454,64 @@ def _is_perfect_power(n: int) -> bool:
     return False
 
 
+def is_sum_of_two_primes(n: Union[int, float]) -> Tuple[bool, List[Tuple[int, int]]]:
+    """
+    Test if a number can be expressed as the sum of two primes.
+
+    This function is related to Goldbach's conjecture, which states that every
+    even integer greater than 2 can be expressed as the sum of two primes.
+    This function works for both even and odd numbers.
+
+    Time Complexity: O(n * log³ n) in worst case
+    Space Complexity: O(k) where k is the number of valid prime pairs
+
+    Args:
+        n: Integer to test
+
+    Returns:
+        Tuple of (is_sum, pairs) where:
+        - is_sum: True if n can be expressed as sum of two primes
+        - pairs: List of (p, q) tuples where p + q = n and both are prime
+
+    Raises:
+        TypeError: If n is not an integer or convertible float
+        ValueError: If n is negative or exceeds 64-bit range
+
+    Examples:
+        >>> is_sum_of_two_primes(4)
+        (True, [(2, 2)])
+        >>> is_sum_of_two_primes(5)
+        (True, [(2, 3)])
+        >>> is_sum_of_two_primes(10)
+        (True, [(3, 7), (5, 5)])
+        >>> is_sum_of_two_primes(11)
+        (False, [])
+        >>> is_sum_of_two_primes(100)
+        (True, [(3, 97), (11, 89), (17, 83), (29, 71), (41, 59), (47, 53)])
+    """
+    n = _validate_input(n, "n")
+
+    # Numbers less than 4 cannot be sum of two primes
+    # (smallest sum is 2+2=4)
+    if n < 4:
+        return False, []
+
+    pairs = []
+
+    # Check all primes up to n/2
+    # We only need to check up to n/2 to avoid duplicate pairs
+    for p in range(2, n // 2 + 1):
+        if is_prime_64(p):
+            q = n - p
+            # Check if the complement is also prime
+            if is_prime_64(q):
+                # Only add if p <= q to avoid duplicates
+                if p <= q:
+                    pairs.append((p, q))
+
+    return len(pairs) > 0, pairs
+
+
 if __name__ == "__main__":
     # Basic tests and demonstrations
     print("Prime Number Theory Module - Basic Tests")

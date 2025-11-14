@@ -16,7 +16,7 @@ import os
 # Add the project root to the Python path to import prime module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from prime.nt import is_prime_64, factorize, prime_run_length, MAX_64BIT
+from prime.nt import is_prime_64, factorize, prime_run_length, is_sum_of_two_primes, MAX_64BIT
 
 app = FastAPI(
     title="Prime Math API",
@@ -72,6 +72,10 @@ app = FastAPI(
         {
             "name": "progressions",
             "description": "Arithmetic progression analysis"
+        },
+        {
+            "name": "goldbach",
+            "description": "Goldbach conjecture and sum of primes operations"
         }
     ]
 )
@@ -122,6 +126,24 @@ class ProgressionResponse(BaseModel):
                 "diff": 2,
                 "length": 5,
                 "primes": [3, 5, 7, 11, 13]
+            }
+        }
+
+
+class SumOfTwoPrimesResponse(BaseModel):
+    """Response model for sum of two primes endpoint."""
+    number: int = Field(..., description="The number that was tested")
+    is_sum_of_two_primes: bool = Field(..., description="Whether the number can be expressed as sum of two primes")
+    pairs: List[List[int]] = Field(..., description="List of [p, q] pairs where p + q = number and both are prime")
+    count: int = Field(..., description="Number of valid prime pairs found")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "number": 10,
+                "is_sum_of_two_primes": True,
+                "pairs": [[3, 7], [5, 5]],
+                "count": 2
             }
         }
 
@@ -302,6 +324,56 @@ async def get_prime_progression(
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
+    except (TypeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@app.get("/sum-of-two-primes/{n}", response_model=SumOfTwoPrimesResponse, tags=["goldbach"])
+async def check_sum_of_two_primes(
+    n: int = Path(..., description="Integer to test if it's a sum of two primes", ge=0)
+) -> SumOfTwoPrimesResponse:
+    """
+    Test if a number can be expressed as the sum of two primes.
+
+    This endpoint relates to Goldbach's conjecture, which states that every
+    even integer greater than 2 can be expressed as the sum of two primes.
+    This endpoint works for both even and odd numbers.
+
+    Args:
+        n: Non-negative integer to test (0 ≤ n ≤ 2^64-1)
+
+    Returns:
+        SumOfTwoPrimesResponse with the number, whether it's a sum of two primes,
+        the list of valid prime pairs, and the count of pairs
+
+    Raises:
+        HTTPException: If n is negative or exceeds 64-bit range
+
+    Examples:
+        - n=4: Returns pairs [(2, 2)]
+        - n=5: Returns pairs [(2, 3)]
+        - n=10: Returns pairs [(3, 7), (5, 5)]
+        - n=11: Returns empty pairs (cannot be expressed as sum of two primes)
+    """
+    try:
+        # Validate input range
+        validate_64bit_integer(n, "n")
+
+        # Check if number is sum of two primes
+        is_sum, pairs = is_sum_of_two_primes(n)
+
+        # Convert tuples to lists for JSON serialization
+        pairs_list = [list(pair) for pair in pairs]
+
+        return SumOfTwoPrimesResponse(
+            number=n,
+            is_sum_of_two_primes=is_sum,
+            pairs=pairs_list,
+            count=len(pairs_list)
+        )
+
     except (TypeError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
